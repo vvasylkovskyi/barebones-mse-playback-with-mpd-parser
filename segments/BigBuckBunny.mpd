@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--Generated with https://github.com/google/shaka-packager version v2.5.1-9f11077-release-->
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd" profiles="urn:mpeg:dash:profile:isoff-live:2011" minBufferTime="PT2S" type="dynamic" publishTime="2023-10-11T08:13:24Z" availabilityStartTime="2023-10-11T08:13:23Z" minimumUpdatePeriod="PT5S" timeShiftBufferDepth="PT1800S">
+  <Period id="0" start="PT0S">
+    <AdaptationSet id="0" contentType="video" width="1920" height="1080" frameRate="15360/256" segmentAlignment="true" par="16:9">
+      <Representation id="0" bandwidth="3745076" codecs="avc1.64002a" mimeType="video/mp4" sar="1:1">
+        <SegmentTemplate timescale="15360" initialization="BigBuckBunny_0.mp4" media="BigBuckBunny_$Number%01d$.mp4" startNumber="1">
+          <SegmentTimeline>
+            <S t="0" d="64000" r="1"/>
+            <S t="128000" d="25600"/>
+          </SegmentTimeline>
+        </SegmentTemplate>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>
