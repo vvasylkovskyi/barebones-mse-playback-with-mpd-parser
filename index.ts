@@ -1,4 +1,4 @@
-import { getParsedManifest } from "./src/mpd-parser";
+import { getAudioFromManifest, getVideoFromManifest } from "./src/mpd-parser";
 
 const startPlayback = async () => {
   const video: HTMLVideoElement = document.createElement("video");
@@ -6,15 +6,34 @@ const startPlayback = async () => {
   video.setAttribute("controls", "");
   document.getElementsByTagName("body")[0].appendChild(video);
 
-  const { codecs, segments, initializationSegment } = await getParsedManifest(
-    "./segments/BigBuckBunny.mpd"
+  const {
+    codecs: audioCodecs,
+    segments: audioSegments,
+    initializationSegment: audioInitializationSegment,
+  } = await getAudioFromManifest(
+    "https://g001-sf-eu-cmaf-prd-ak.pcdn01.cssott.com/SST/g2/GMO_00000000210233_92/SST_1676484729495-sPuUp_01/mpeg_cenc_2sec/master_manifest_default_r18.mpd?audio=all&subtitle=all&forcedNarrative=true&trickplay=true"
   );
 
-  const mp4InitializationUri = initializationSegment;
-  const mimeCodec = `video/mp4; codecs="${codecs}"`;
+  const {
+    codecs: videoCodecs,
+    segments: videoSegments,
+    initializationSegment: videoInitializationSegment,
+    duration,
+  } = await getVideoFromManifest(
+    "https://g001-sf-eu-cmaf-prd-ak.pcdn01.cssott.com/SST/g2/GMO_00000000210233_92/SST_1676484729495-sPuUp_01/mpeg_cenc_2sec/master_manifest_default_r18.mpd?audio=all&subtitle=all&forcedNarrative=true&trickplay=true"
+  );
 
-  if (!MediaSource.isTypeSupported(mimeCodec)) {
-    console.error("Unsupported media format");
+  const videoMimeCodec = `video/mp4; codecs="${videoCodecs}"`;
+
+  const audioMimeCodec = `audio/mp4; codecs="${audioCodecs}"`;
+
+  if (!MediaSource.isTypeSupported(videoMimeCodec)) {
+    console.error("Unsupported media format: ", videoMimeCodec);
+    return;
+  }
+
+  if (!MediaSource.isTypeSupported(audioMimeCodec)) {
+    console.error("Unsupported media format: ", audioMimeCodec);
     return;
   }
 
@@ -27,25 +46,78 @@ const startPlayback = async () => {
     return mp4Response.arrayBuffer();
   }
 
-  async function onSourceOpen() {
-    let i = 0;
-    URL.revokeObjectURL(video.src); // Revoke Object URL for garbage collection
+  async function appendSourceBuffer(
+    mimeCodec: string,
+    segments: any,
+    initializationSegment: any,
+    onEnd: () => void
+  ) {
+    let index = 0;
+
     const sourceBuffer: SourceBuffer = mediaSource.addSourceBuffer(mimeCodec);
 
     sourceBuffer.addEventListener("updateend", async function () {
-      if (!sourceBuffer.updating && i !== segments.length) {
-        const nextSegmentUri = segments[i];
+      if (!sourceBuffer.updating && index !== segments.length) {
+        const nextSegmentUri = segments[index];
         const nextSegment = await getMp4Data(nextSegmentUri); // Next segments
         sourceBuffer.appendBuffer(nextSegment);
-        i++;
+        index++;
       }
-      if (mediaSource.readyState === "open" && i === segments.length) {
-        mediaSource.endOfStream();
+
+      if (
+        mediaSource.readyState === "open" &&
+        !sourceBuffer.updating &&
+        index === segments.length
+      ) {
+        onEnd();
       }
     });
 
-    const firstSegment = await getMp4Data(mp4InitializationUri); // First segment is here
+    const firstSegment = await getMp4Data(initializationSegment); // First segment is here
     sourceBuffer.appendBuffer(firstSegment);
+  }
+
+  async function onSourceOpen() {
+    URL.revokeObjectURL(video.src); // Revoke Object URL for garbage collection
+    mediaSource.removeEventListener(
+      "sourceopen",
+      onSourceOpen.bind(mediaSource)
+    );
+
+    mediaSource.duration = duration;
+
+    let hasAudioBufferReachedTheEnd = false;
+    let hasVideoBufferReachedTheEnd = false;
+
+    const onVideoEnded = () => {
+      hasVideoBufferReachedTheEnd = true;
+      if (hasAudioBufferReachedTheEnd) {
+        mediaSource.endOfStream();
+      }
+    };
+
+    const onAudioEnded = () => {
+      hasAudioBufferReachedTheEnd = true;
+      if (hasVideoBufferReachedTheEnd) {
+        mediaSource.endOfStream();
+      }
+    };
+
+    appendSourceBuffer(
+      videoMimeCodec,
+      videoSegments,
+      videoInitializationSegment,
+      onVideoEnded
+    );
+
+    appendSourceBuffer(
+      audioMimeCodec,
+      audioSegments,
+      audioInitializationSegment,
+      onAudioEnded
+    );
+
+    video.play();
   }
 
   mediaSource.addEventListener("sourceopen", onSourceOpen.bind(mediaSource));
